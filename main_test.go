@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"encoding/json"
-	"bytes"
 	"io/ioutil"
 	"fmt"
+	"bytes"
 )
 
 var a App
@@ -38,7 +38,7 @@ func ensureTableExists() {
 }
 
 func clearTable() {
-	a.DB.Exec("TRUNCATE schemas")
+	a.DB.Exec("TRUNCATE json_schema")
 	//shouldn't be necessary with restart identity: a.DB.Exec("ALTER SEQUENCE schemas_id_seq RESTART WITH 1")
 }
 
@@ -71,21 +71,6 @@ func TestEmptyTable(t *testing.T) {
 
 	if body := response.Body.String(); body != "[]" {
 		t.Errorf("Expected an empty array. Got %s", body)
-	}
-}
-
-func TestGetNonExistentSchema(t *testing.T) {
-	clearTable()
-
-	req, _ := http.NewRequest("GET", "/schema/11", nil)
-	response := executeRequest(req)
-
-	checkResponseCode(t, http.StatusNotFound, response.Code)
-
-	var m map[string]string
-	json.Unmarshal(response.Body.Bytes(), &m)
-	if m["error"] != "Schema not found" {
-		t.Errorf("Expected the 'error' key of the response to be set to 'Schema not found'. Got '%s'", m["error"])
 	}
 }
 

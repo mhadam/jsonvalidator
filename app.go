@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"encoding/json"
 	"io/ioutil"
+	"strconv"
 )
 
 type App struct {
@@ -78,7 +79,7 @@ func (a *App) createSchema(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	if json.Valid(body) {
-		s.SchemaDef = string(body)
+		s.SchemaDef, _ = strconv.Unquote(string(body))
 	} else {
 		log.Printf("Invalid json uploaded")
 		respondToInvalidSchema(w, id)
@@ -108,7 +109,7 @@ func (a *App) getSchema(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, []byte(s.SchemaDef))
+	respondWithJSON(w, http.StatusOK, s.SchemaDef)
 }
 
 func (a *App) validateSchema(w http.ResponseWriter, r *http.Request) {

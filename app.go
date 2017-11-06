@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 
+	"github.com/linkosmos/mapop"
 	"github.com/gorilla/mux"
 	"github.com/xeipuuv/gojsonschema"
 	_ "github.com/lib/pq"
@@ -42,29 +43,18 @@ func (a *App) initializeRoutes() {
 	a.Router.HandleFunc("/validate/{schemaID}", a.validateSchema).Methods("POST")
 }
 
-type genericData map[string]interface{}
-
-func (d genericData) UnmarshalJSON(b []byte) error {
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-	switch {
-	default:
-		*d =
-	}
-
-	return nil
-}
-
-func (s *string) cleanDocument(document byte[]) {
+func cleanDocument(document []byte) ([]byte, error) {
 	var m map[string]interface{}
 	err := json.Unmarshal(document, &m)
 	if err != nil {
 		panic(err)
 	}
 
+	m = mapop.SelectFunc(func(key string, value interface{}) bool {
+		return value != nil
+	}, m)
 
+	return json.Marshal(&m)
 }
 
 func (a *App) createSchema(w http.ResponseWriter, r *http.Request) {
@@ -128,6 +118,12 @@ func (a *App) validateSchema(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	if json.Valid(body) {
+		body, err = cleanDocument(body)
+		if err != nil {
+			log.Printf("Error cleaning document: %v", err)
+			respondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 		jsonDoc := string(body)
 
 		if err := s.getSchema(a.DB); err != nil {
@@ -154,7 +150,7 @@ func (a *App) validateSchema(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	responseWithJSON(w, http.StatusOK, s)
+	respondWithJSON(w, http.StatusOK, s)
 }
 
 func respondWithError(w http.ResponseWriter, code int, message string) {

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"encoding/json"
 	"io/ioutil"
+	"bytes"
 )
 
 type App struct {
@@ -86,10 +87,10 @@ func (a *App) createSchema(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.createSchema(a.DB); err != nil {
-		respondWithError(w, "uploadSchema", id, err.Error())
+		respondWithError(w, http.StatusBadRequest, "uploadSchema", id, err.Error())
 		return
 	}
-	
+
 	respondToValidSchema(w, id)
 }
 
@@ -101,14 +102,14 @@ func (a *App) getSchema(w http.ResponseWriter, r *http.Request) {
 	if err := s.getSchema(a.DB); err != nil {
 		switch err {
 		case sql.ErrNoRows:
-			respondWithError(w, http.StatusNotFound, "Schema not found")
+			respondWithError(w, http.StatusNotFound, "downloadSchema", id, err.Error())
 		default:
-			respondWithError(w, http.StatusInternalServerError, err.Error())
+			respondWithError(w, http.StatusInternalServerError, "downloadSchema", id, err.Error())
 		}
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, s)
+	respondWithJSON(w, http.StatusOK, []byte(s.SchemaDef))
 }
 
 func (a *App) validateSchema(w http.ResponseWriter, r *http.Request) {
@@ -190,8 +191,8 @@ func respondToInvalidDocument(w http.ResponseWriter, id string, error string) {
 		Status: "error"})
 }
 
-func respondWithError(w http.ResponseWriter, action string, id string, error string) {
-	respondWithJSON(w, http.StatusBadRequest, AppResponse{
+func respondWithError(w http.ResponseWriter, responseCode int, action string, id string, error string) {
+	respondWithJSON(w, responseCode, AppResponse{
 		Action: action,
 		Id: id,
 		Message: error,

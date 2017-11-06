@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"encoding/json"
 	"io/ioutil"
-	"bytes"
 )
 
 type App struct {
@@ -119,8 +118,8 @@ func (a *App) validateSchema(w http.ResponseWriter, r *http.Request) {
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		log.Printf("Error reading body: %v", err)
-		http.Error(w, "can't read body", http.StatusBadRequest)
+		log.Printf("Error reading request body: %v", err)
+		respondToInvalidDocument(w, id, err.Error())
 		return
 	}
 	defer r.Body.Close()
@@ -129,13 +128,13 @@ func (a *App) validateSchema(w http.ResponseWriter, r *http.Request) {
 		body, err = cleanDocument(body)
 		if err != nil {
 			log.Printf("Error cleaning document: %v", err)
-			respondWithError(w, http.StatusInternalServerError, err.Error())
+			respondWithError(w, http.StatusBadRequest, "validateDocument", id, err.Error())
 			return
 		}
 		jsonDoc := string(body)
 
 		if err := s.getSchema(a.DB); err != nil {
-			respondWithError(w, http.StatusInternalServerError, err.Error())
+			respondWithError(w, http.StatusInternalServerError, "validateDocument", id, err.Error())
 			return
 		}
 
@@ -143,22 +142,25 @@ func (a *App) validateSchema(w http.ResponseWriter, r *http.Request) {
 		documentLoader := gojsonschema.NewStringLoader(jsonDoc)
 		result, err := gojsonschema.Validate(schemaLoader, documentLoader)
 
-		if result.Valid() {
-			fmt.Printf("The document is valid\n")
-		} else {
-			fmt.Printf("The document is not valid. see errors :\n")
+		if err != nil {
+			respondWithError(w, http.StatusConflict, "validateDocument", id, err.Error())
+			return
+		}
+
+		if !(result.Valid()) {
 			for _, err := range result.Errors() {
 				// Err implements the ResultError interface
 				fmt.Printf("- %s\n", err)
 			}
+			respondWithError(w, http.StatusBadRequest, "validateDocument", id, err.Error())
 		}
 	} else {
-		log.Printf("Invalid json uploaded")
-		http.Error(w, "Invalid json uploaded", http.StatusBadRequest)
+		log.Printf("Invalid json document uploaded")
+		respondWithError(w, http.StatusBadRequest, "validateDocument", id, "Invalid json document")
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, s)
+	respondToValidDocument(w, id)
 }
 
 func respondToInvalidSchema(w http.ResponseWriter, id string) {

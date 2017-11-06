@@ -19,6 +19,13 @@ type App struct {
 	DB     *sql.DB
 }
 
+type AppResponse struct {
+	Action string `json:"action"`
+	Id string `json:"id"`
+	Status string `json:"status"`
+	Message string `json:"message,omitempty"`
+}
+
 func (a *App) Initialize(user, password, dbname string) {
 	connectionString :=
 		fmt.Sprintf("user=%s password=%s dbname=%s sslmode=disable", user, password, dbname)
@@ -64,8 +71,8 @@ func (a *App) createSchema(w http.ResponseWriter, r *http.Request) {
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		log.Printf("Error reading body: %v", err)
-		http.Error(w, "can't read body", http.StatusBadRequest)
+		log.Printf("Error reading request body: %v", err)
+		respondToInvalidSchema(w, id)
 		return
 	}
 	defer r.Body.Close()
@@ -74,16 +81,16 @@ func (a *App) createSchema(w http.ResponseWriter, r *http.Request) {
 		s.SchemaDef = string(body)
 	} else {
 		log.Printf("Invalid json uploaded")
-		http.Error(w, "Invalid json uploaded", http.StatusBadRequest)
+		respondToInvalidSchema(w, id)
 		return
 	}
 
 	if err := s.createSchema(a.DB); err != nil {
-		respondWithError(w, http.StatusInternalServerError, err.Error())
+		respondWithError(w, "uploadSchema", id, err.Error())
 		return
 	}
-
-	respondWithJSON(w, http.StatusCreated, s)
+	
+	respondToValidSchema(w, id)
 }
 
 func (a *App) getSchema(w http.ResponseWriter, r *http.Request) {
@@ -153,8 +160,42 @@ func (a *App) validateSchema(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, s)
 }
 
-func respondWithError(w http.ResponseWriter, code int, message string) {
-	respondWithJSON(w, code, map[string]string{"error": message})
+func respondToInvalidSchema(w http.ResponseWriter, id string) {
+	respondWithJSON(w, http.StatusBadRequest, AppResponse{
+		Action: "uploadSchema",
+		Id: id,
+		Message: "Invalid JSON",
+		Status: "error"})
+}
+
+func respondToValidSchema(w http.ResponseWriter, id string) {
+	respondWithJSON(w, http.StatusCreated, AppResponse{
+		Action: "uploadSchema",
+		Id: id,
+		Status: "success"})
+}
+
+func respondToValidDocument(w http.ResponseWriter, id string) {
+	respondWithJSON(w, http.StatusOK, AppResponse{
+		Action: "validateDocument",
+		Id: id,
+		Status: "success"})
+}
+
+func respondToInvalidDocument(w http.ResponseWriter, id string, error string) {
+	respondWithJSON(w, http.StatusBadRequest, AppResponse{
+		Action: "validateDocument",
+		Id: id,
+		Message: error,
+		Status: "error"})
+}
+
+func respondWithError(w http.ResponseWriter, action string, id string, error string) {
+	respondWithJSON(w, http.StatusBadRequest, AppResponse{
+		Action: action,
+		Id: id,
+		Message: error,
+		Status: "error"})
 }
 
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {

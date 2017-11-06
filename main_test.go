@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"encoding/json"
 	"bytes"
+	"io/ioutil"
+	"fmt"
 )
 
 var a App
@@ -90,7 +92,12 @@ func TestGetNonExistentSchema(t *testing.T) {
 func TestCreateSchema(t *testing.T) {
 	clearTable()
 
-	req, _ := http.NewRequest("POST", "/schema", bytes.NewBuffer(payload))
+	raw, err := ioutil.ReadFile("./pages.json")
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+
+	req, _ := http.NewRequest("POST", "/schema/config-schema", bytes.NewBuffer(raw))
 	response := executeRequest(req)
 
 	checkResponseCode(t, http.StatusCreated, response.Code)

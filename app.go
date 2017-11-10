@@ -12,7 +12,11 @@ import (
 	"net/http"
 	"encoding/json"
 	"io/ioutil"
-	"strconv"
+	"bufio"
+	"os"
+	"bytes"
+	"regexp"
+	"io"
 )
 
 type App struct {
@@ -49,9 +53,10 @@ func (a *App) initializeRoutes() {
 	a.Router.HandleFunc("/schema/{schemaID}", a.createSchema).Methods("POST")
 	a.Router.HandleFunc("/schema/{schemaID}", a.getSchema).Methods("GET")
 	a.Router.HandleFunc("/validate/{schemaID}", a.validateSchema).Methods("POST")
+	a.Router.HandleFunc("/clean", a.cleanDocumentHandler).Methods("POST")
 }
 
-func cleanDocument(document []byte) ([]byte, error) {
+func cleanDocumentOld(document []byte) ([]byte, error) {
 	var m map[string]interface{}
 	err := json.Unmarshal(document, &m)
 	if err != nil {
@@ -63,6 +68,44 @@ func cleanDocument(document []byte) ([]byte, error) {
 	}, m)
 
 	return json.Marshal(&m)
+}
+
+func StreamToByte(stream io.Reader) []byte {
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(stream)
+	return buf.Bytes()
+}
+
+func cleanDocumentRegex(document []byte) ([]byte, error) {
+	scanner := bufio.NewScanner(bytes.NewBuffer(document))
+	cleanDoc := bytes.Buffer{}
+	re := regexp.MustCompile(`:\s*null\s*,?$`)
+	for scanner.Scan() {
+		if re.FindStringIndex(scanner.Text()) == nil {
+			cleanDoc.WriteString(scanner.Text())
+		}
+	}
+
+	err := scanner.Err()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "reading standard input:", err)
+	}
+
+	return cleanDoc.Bytes(), err
+}
+
+func (a *App) cleanDocumentHandler(w http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("Error reading request body: %v", err)
+		respondWithString(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	defer r.Body.Close()
+
+	cleanDoc, _ := cleanDocument(body)
+
+	respondWithString(w, http.StatusOK, string(cleanDoc))
 }
 
 func (a *App) createSchema(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +122,7 @@ func (a *App) createSchema(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	if json.Valid(body) {
-		s.SchemaDef, _ = strconv.Unquote(string(body))
+		s.SchemaDef = string(body)
 	} else {
 		log.Printf("Invalid json uploaded")
 		respondToInvalidSchema(w, id)
@@ -90,7 +133,6 @@ func (a *App) createSchema(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "uploadSchema", id, err.Error())
 		return
 	}
-
 	respondToValidSchema(w, id)
 }
 
@@ -108,8 +150,7 @@ func (a *App) getSchema(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-
-	respondWithJSON(w, http.StatusOK, s.SchemaDef)
+	respondWithString(w, http.StatusOK, s.SchemaDef)
 }
 
 func (a *App) validateSchema(w http.ResponseWriter, r *http.Request) {
@@ -208,4 +249,10 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	w.Write(response)
+}
+
+func respondWithString(w http.ResponseWriter, code int, response string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write([]byte(response))
 }

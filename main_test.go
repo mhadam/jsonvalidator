@@ -61,28 +61,28 @@ func checkResponseCode(t *testing.T, expected, actual int) {
 	}
 }
 
-func TestEmptyTable(t *testing.T) {
-	clearTable()
-
-	req, _ := http.NewRequest("GET", "/schema", nil)
-	response := executeRequest(req)
-
-	checkResponseCode(t, http.StatusOK, response.Code)
-
-	if body := response.Body.String(); body != "[]" {
-		t.Errorf("Expected an empty array. Got %s", body)
-	}
-}
+//func TestEmptyTable(t *testing.T) {
+//	clearTable()
+//
+//	req, _ := http.NewRequest("GET", "/schema", nil)
+//	response := executeRequest(req)
+//
+//	checkResponseCode(t, http.StatusOK, response.Code)
+//
+//	if body := response.Body.String(); body != "[]" {
+//		t.Errorf("Expected an empty array. Got %s", body)
+//	}
+//}
 
 func TestCreateSchema(t *testing.T) {
 	clearTable()
 
-	raw, err := ioutil.ReadFile("./pages.json")
+	raw, err := ioutil.ReadFile("./config-schema-valid.json")
 	if err != nil {
 		fmt.Println(err.Error())
 	}
 
-	req, _ := http.NewRequest("POST", "/schema/config-schema", bytes.NewBuffer(raw))
+	req, _ := http.NewRequest("POST", "http://localhost:8000/schema/config-schema", bytes.NewBuffer(raw))
 	response := executeRequest(req)
 
 	checkResponseCode(t, http.StatusCreated, response.Code)
@@ -92,6 +92,61 @@ func TestCreateSchema(t *testing.T) {
 
 	if m["action"] != "uploadSchema" {
 		t.Errorf("Expected action to be 'uploadSchema'. Got '%v'", m["action"])
+	}
+
+	if m["id"] != "config-schema" {
+		t.Errorf("Expected id to be 'config-schema'. Got '%v'", m["id"])
+	}
+
+	if m["status"] != "success" {
+		t.Errorf("Expected status to be 'success'. Got '%v'", m["status"])
+	}
+}
+
+func TestCleanDocument(t *testing.T) {
+	clearTable()
+
+	raw, err := ioutil.ReadFile("./config.json")
+	if err != nil {
+		log.Println(err.Error())
+	}
+
+	req, _ := http.NewRequest("POST", "http://localhost:8000/clean", bytes.NewBuffer(raw))
+	response := executeRequest(req)
+
+	checkResponseCode(t, http.StatusOK, response.Code)
+
+	clean, err := ioutil.ReadFile("./clean-config.json")
+	if err != nil {
+		log.Println(err.Error())
+	}
+
+	if bytes.Equal(clean, response.Body.Bytes()) {
+
+	} else {
+		t.Errorf("Expected response to match input. Got '%v'", string(response.Body.Bytes()))
+	}
+
+}
+
+func TestValidateDocument(t *testing.T) {
+	clearTable()
+
+	raw, err := ioutil.ReadFile("./config.json")
+	if err != nil {
+		log.Println(err.Error())
+	}
+
+	req, _ := http.NewRequest("POST", "http://localhost:8000/validate/config-schema", bytes.NewBuffer(raw))
+	response := executeRequest(req)
+
+	checkResponseCode(t, http.StatusOK, response.Code)
+
+	var m map[string]interface{}
+	json.Unmarshal(response.Body.Bytes(), &m)
+
+	if m["action"] != "validateDocument" {
+		t.Errorf("Expected action to be 'validateDocument'. Got '%v'", m["action"])
 	}
 
 	if m["id"] != "config-schema" {

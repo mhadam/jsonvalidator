@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 
-	"github.com/linkosmos/mapop"
 	"github.com/gorilla/mux"
 	"github.com/xeipuuv/gojsonschema"
 	_ "github.com/lib/pq"
@@ -56,24 +55,103 @@ func (a *App) initializeRoutes() {
 	a.Router.HandleFunc("/clean", a.cleanDocumentHandler).Methods("POST")
 }
 
-func cleanDocumentOld(document []byte) ([]byte, error) {
-	var m map[string]interface{}
-	err := json.Unmarshal(document, &m)
-	if err != nil {
-		panic(err)
-	}
-
-	m = mapop.SelectFunc(func(key string, value interface{}) bool {
-		return value != nil
-	}, m)
-
-	return json.Marshal(&m)
-}
-
 func StreamToByte(stream io.Reader) []byte {
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(stream)
 	return buf.Bytes()
+}
+
+type MapStr map[string]interface{}
+
+func (ms *MapStr) cleanInterfaceMap(in map[interface{}]interface{}) error {
+	result := make(map[string]interface{})
+	result = cleanUpInterfaceMap(in)
+	parseMap(result)
+	*ms = result
+	return nil
+}
+
+func cleanUpInterfaceArray(in []interface{}) []interface{} {
+	result := make([]interface{}, len(in))
+	for i, v := range in {
+		if v != nil {
+			result[i] = cleanUpMapValue(v)
+		}
+	}
+	return result
+}
+
+func cleanUpInterfaceMap(in map[interface{}]interface{}) map[string]interface{} {
+	log.Println("cleaning interface map")
+	result := make(map[string]interface{})
+	for k, v := range in {
+		if v == nil {
+			log.Println("deleting nil map key-value")
+			//delete(in, k)
+		} else {
+			log.Println(fmt.Sprintf("%v", k))
+			result[fmt.Sprintf("%v", k)] = cleanUpMapValue(v)
+		}
+	}
+	return result
+}
+
+func cleanUpMapValue(v interface{}) interface{} {
+	switch v := v.(type) {
+	case []interface{}:
+		return cleanUpInterfaceArray(v)
+	case map[interface{}]interface{}:
+		return cleanUpInterfaceMap(v)
+	case string:
+		return v
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+func parseMap(aMap map[string]interface{}) {
+	for key, val := range aMap {
+		switch concreteVal := val.(type) {
+		case map[string]interface{}:
+			log.Println(key)
+			parseMap(val.(map[string]interface{}))
+		case []interface{}:
+			log.Println(key)
+			parseArray(val.([]interface{}))
+		default:
+			if concreteVal == nil {
+				//delete(aMap, key)
+				log.Println("deleting: ", key)
+			}
+			log.Println(key, ":", concreteVal)
+		}
+	}
+}
+
+func parseArray(anArray []interface{}) {
+	for i, val := range anArray {
+		switch concreteVal := val.(type) {
+		case map[string]interface{}:
+			fmt.Println("Index:", i)
+			parseMap(val.(map[string]interface{}))
+		case []interface{}:
+			fmt.Println("Index:", i)
+			parseArray(val.([]interface{}))
+		default:
+			fmt.Println("Index", i, ":", concreteVal)
+
+		}
+	}
+}
+
+func cleanDocument(document []byte) ([]byte, error) {
+	var raw map[interface{}]interface{}
+	var cleanedUp MapStr
+	json.Unmarshal(document, raw)
+	cleanedUp.cleanInterfaceMap(raw)
+	cleanDoc, err := json.Marshal(cleanedUp)
+
+	return cleanDoc, err
 }
 
 func cleanDocumentRegex(document []byte) ([]byte, error) {
@@ -102,6 +180,8 @@ func (a *App) cleanDocumentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.Body.Close()
+
+	log.Print(string(body))
 
 	cleanDoc, _ := cleanDocument(body)
 

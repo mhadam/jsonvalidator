@@ -109,7 +109,7 @@ func cleanUpMapValue(v interface{}) interface{} {
 	}
 }
 
-func parseMap(aMap map[string]interface{}) {
+func parseMap(aMap map[string]interface{}) map[string]interface{}{
 	for key, val := range aMap {
 		switch concreteVal := val.(type) {
 		case map[string]interface{}:
@@ -120,12 +120,13 @@ func parseMap(aMap map[string]interface{}) {
 			parseArray(val.([]interface{}))
 		default:
 			if concreteVal == nil {
-				//delete(aMap, key)
+				delete(aMap, key)
 				log.Println("deleting: ", key)
 			}
 			log.Println(key, ":", concreteVal)
 		}
 	}
+	return aMap
 }
 
 func parseArray(anArray []interface{}) {
@@ -145,11 +146,12 @@ func parseArray(anArray []interface{}) {
 }
 
 func cleanDocument(document []byte) ([]byte, error) {
-	var raw map[interface{}]interface{}
-	var cleanedUp MapStr
-	json.Unmarshal(document, raw)
-	cleanedUp.cleanInterfaceMap(raw)
-	cleanDoc, err := json.Marshal(cleanedUp)
+	var raw map[string]interface{}
+	json.Unmarshal(document, &raw)
+	log.Printf("unmarshalled: %v", raw)
+	raw = parseMap(raw)
+	log.Printf("parsed: %v", raw)
+	cleanDoc, err := json.Marshal(raw)
 
 	return cleanDoc, err
 }

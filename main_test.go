@@ -132,13 +132,21 @@ func TestCleanDocument(t *testing.T) {
 func TestValidateDocument(t *testing.T) {
 	clearTable()
 
-	raw, err := ioutil.ReadFile("./config.json")
+	raw, err := ioutil.ReadFile("./config-schema-valid.json")
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+
+	req, _ := http.NewRequest("POST", "http://localhost:8000/schema/config-schema", bytes.NewBuffer(raw))
+	response := executeRequest(req)
+
+	raw, err = ioutil.ReadFile("./config.json")
 	if err != nil {
 		log.Println(err.Error())
 	}
 
-	req, _ := http.NewRequest("POST", "http://localhost:8000/validate/config-schema", bytes.NewBuffer(raw))
-	response := executeRequest(req)
+	req, _ = http.NewRequest("POST", "http://localhost:8000/validate/config-schema", bytes.NewBuffer(raw))
+	response = executeRequest(req)
 
 	checkResponseCode(t, http.StatusOK, response.Code)
 

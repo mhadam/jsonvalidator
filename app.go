@@ -294,6 +294,7 @@ func (a *App) validateSchema(w http.ResponseWriter, r *http.Request) {
 				fmt.Printf("- %s\n", err)
 			}
 			respondWithError(w, http.StatusBadRequest, "validateDocument", id, err.Error())
+			return
 		}
 	} else {
 		log.Printf("Invalid json document uploaded")

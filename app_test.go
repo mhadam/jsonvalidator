@@ -9,54 +9,59 @@ import (
 	"io/ioutil"
 	"fmt"
 	"bytes"
-	"encoding/json"
 	"github.com/gorilla/mux"
 	"net/http/httptest"
+	"encoding/json"
 )
 
 var _ = Describe("App", func() {
-	var a App
-	var router *mux.Router
-	var recorder *httptest.ResponseRecorder
-	var request *http.Request
+	var (
+		a App
+		router *mux.Router
+		recorder *httptest.ResponseRecorder
+		request *http.Request
+	)
 
 	BeforeEach(func() {
 		a = App{}
-		a.Run(":8080")
 		a.Initialize(
 			"postgres",
 			"snowplow",
 			"snowplow",
 		)
 
+		a.EnsureTableExists()
+		a.ClearTable()
 		recorder = httptest.NewRecorder()
 		router = a.Router
 	})
 
 	AfterEach(func() {
-		a.ensureTableExists()
-		a.clearTable()
+		a.EnsureTableExists()
+		a.ClearTable()
 	})
 
 	Describe("POST /create-schema", func() {
-		raw, err := ioutil.ReadFile("./config-schema-valid.json")
-		if err != nil {
-			fmt.Println(err.Error())
-		}
+		var (
+			m map[string]interface{}
+		)
 
 		BeforeEach(func() {
-			request, _ = http.NewRequest("POST", "/create-schema", bytes.NewReader(raw))
+			raw, err := ioutil.ReadFile("./config-schema-valid.json")
+			if err != nil {
+				fmt.Println(err.Error())
+			}
+
+			request, _ = http.NewRequest("POST", "/schema/config-schema", bytes.NewReader(raw))
+			router.ServeHTTP(recorder, request)
 		})
 
 		It("returns a status code of 201", func() {
-			router.ServeHTTP(recorder, request)
 			Expect(recorder.Code).To(Equal(http.StatusCreated))
 		})
 
-		var m map[string]interface{}
-		json.Unmarshal(recorder.Body.Bytes(), &m)
-
 		It("returns correct body", func() {
+			json.Unmarshal(recorder.Body.Bytes(), &m)
 			Expect(m["action"]).To(Equal("uploadSchema"))
 			Expect(m["id"]).To(Equal("config-schema"))
 			Expect(m["status"]).To(Equal("success"))

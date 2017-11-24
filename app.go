@@ -55,13 +55,13 @@ func (a *App) initializeRoutes() {
 	a.Router.HandleFunc("/clean", a.cleanDocumentHandler).Methods("POST")
 }
 
-func (a *App) ensureTableExists() {
+func (a *App) EnsureTableExists() {
 	if _, err := a.DB.Exec(tableCreationQuery); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func (a *App) clearTable() {
+func (a *App) ClearTable() {
 	a.DB.Exec("TRUNCATE json_schema")
 	//shouldn't be necessary with restart identity: a.DB.Exec("ALTER SEQUENCE schemas_id_seq RESTART WITH 1")
 }

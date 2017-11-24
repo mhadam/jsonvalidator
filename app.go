@@ -45,7 +45,7 @@ func (a *App) Initialize(user, password, dbname string) {
 }
 
 func (a *App) Run(addr string) {
-	log.Fatal(http.ListenAndServe(":8000", a.Router))
+	log.Fatal(http.ListenAndServe(addr, a.Router))
 }
 
 func (a *App) initializeRoutes() {
@@ -54,6 +54,23 @@ func (a *App) initializeRoutes() {
 	a.Router.HandleFunc("/validate/{schemaID}", a.validateSchema).Methods("POST")
 	a.Router.HandleFunc("/clean", a.cleanDocumentHandler).Methods("POST")
 }
+
+func (a *App) ensureTableExists() {
+	if _, err := a.DB.Exec(tableCreationQuery); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (a *App) clearTable() {
+	a.DB.Exec("TRUNCATE json_schema")
+	//shouldn't be necessary with restart identity: a.DB.Exec("ALTER SEQUENCE schemas_id_seq RESTART WITH 1")
+}
+
+const tableCreationQuery = `CREATE TABLE IF NOT EXISTS json_schema
+(
+json_schema_id TEXT PRIMARY KEY,
+json_schema_def TEXT
+)`
 
 func StreamToByte(stream io.Reader) []byte {
 	buf := new(bytes.Buffer)
